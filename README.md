@@ -1,36 +1,58 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Auditflow
+
+AI-powered invoice auditing platform for small and medium-sized businesses. Detects hidden fees, overcharges, duplicate charges, and suspicious line items in vendor invoices using Claude AI.
+
+## Tech Stack
+
+- **Frontend:** Next.js (App Router) + TypeScript + Tailwind CSS
+- **Database:** Supabase (PostgreSQL) with Row Level Security
+- **Auth:** Supabase Auth (email/password + Google OAuth)
+- **Payments:** Stripe subscriptions with webhook sync
+- **AI:** Claude API for invoice analysis and dispute letter generation
+- **Hosting:** Vercel
+
+## Project Structure
+
+```
+├── app/           # Pages and API routes (Next.js App Router)
+├── components/    # Reusable UI components
+├── lib/           # Utility functions and API helpers
+│   ├── claude.ts  # Claude API client
+│   ├── stripe.ts  # Stripe configuration
+│   └── supabase.ts # Supabase client
+├── types/         # TypeScript interfaces
+└── public/        # Static assets
+```
 
 ## Getting Started
 
-First, run the development server:
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/YOUR_USERNAME/auditflow.git
+   cd auditflow
+   ```
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+3. Copy the environment variables and fill in your keys:
+   ```bash
+   cp .env.example .env.local
+   ```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+4. Run the development server:
+   ```bash
+   npm run dev
+   ```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+5. Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-## Learn More
+## Environment Variables
 
-To learn more about Next.js, take a look at the following resources:
+See `.env.example` for required configuration. You will need:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **Supabase** project URL and keys
+- **Stripe** secret and publishable keys
+- **Anthropic** API key for Claude
