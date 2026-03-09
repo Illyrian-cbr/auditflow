@@ -216,23 +216,27 @@ export async function POST(request: NextRequest) {
 
     const mediaType = getMediaType(file.type);
     const isPro = tier === 'pro';
+    const isPdf = file.type === 'application/pdf';
 
-    // Build message content with vision
-    const imageContent: {
-      type: 'image';
-      source: {
-        type: 'base64';
-        media_type: string;
-        data: string;
-      };
-    } = {
-      type: 'image',
-      source: {
-        type: 'base64',
-        media_type: mediaType,
-        data: base64Data,
-      },
-    };
+    // PDFs use a 'document' content block; images use an 'image' content block
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const fileContent: any = isPdf
+      ? {
+          type: 'document',
+          source: {
+            type: 'base64',
+            media_type: 'application/pdf',
+            data: base64Data,
+          },
+        }
+      : {
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: mediaType,
+            data: base64Data,
+          },
+        };
 
     // =========================================================
     // Pro tier: Two-pass approach with benchmark cache pre-check
@@ -251,7 +255,7 @@ export async function POST(request: NextRequest) {
             {
               role: 'user',
               content: [
-                imageContent,
+                fileContent,
                 { type: 'text', text: EXTRACT_LINE_ITEMS_PROMPT },
               ],
             },
@@ -342,7 +346,7 @@ Add these fields to your JSON response:
         {
           role: 'user',
           content: [
-            imageContent,
+            fileContent,
             {
               type: 'text',
               text: prompt,
