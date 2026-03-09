@@ -140,8 +140,49 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const serverSupabase = createServerClient();
+
+    // Ensure user profile row exists — Google OAuth users may bypass the signup trigger
+    const { data: existingUser } = await serverSupabase
+      .from('users')
+      .select('id, subscription_tier')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    if (!existingUser) {
+      const { error: insertUserError } = await serverSupabase
+        .from('users')
+        .insert({
+          id: user.id,
+          email: user.email ?? '',
+          name:
+            user.user_metadata?.full_name ??
+            user.user_metadata?.name ??
+            null,
+          subscription_tier: 'free',
+        });
+
+      if (insertUserError) {
+        console.error('Failed to create user profile:', insertUserError);
+        return NextResponse.json(
+          { error: `Failed to initialize user profile: ${insertUserError.message}` },
+          { status: 500 }
+        );
+      }
+    }
+
     // Check scan limit
-    const scanLimit = await checkScanLimit(user.id);
+    let scanLimit: { allowed: boolean; used: number; limit: number; remaining: number };
+    try {
+      scanLimit = await checkScanLimit(user.id);
+    } catch (limitError) {
+      console.error('checkScanLimit error:', limitError);
+      return NextResponse.json(
+        { error: `Scan limit check failed: ${String(limitError)}` },
+        { status: 500 }
+      );
+    }
+
     if (!scanLimit.allowed) {
       return NextResponse.json(
         {
@@ -155,14 +196,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get user tier
-    const serverSupabase = createServerClient();
-    const { data: dbUser } = await serverSupabase
-      .from('users')
-      .select('subscription_tier')
-      .eq('id', user.id)
-      .single();
-
-    const tier = (dbUser?.subscription_tier || 'free') as SubscriptionTier;
+    const tier = (existingUser?.subscription_tier || 'free') as SubscriptionTier;
 
     // Read uploaded file from FormData
     const formData = await request.formData();
@@ -419,9 +453,10 @@ Add these fields to your JSON response:
       },
     });
   } catch (error) {
-    console.error('Analyze endpoint error:', error);
+    const message = error instanceof Error ? error.message : String(error);
+    console.error('Analyze endpoint error:', message, error);
     return NextResponse.json(
-      { error: 'Failed to analyze invoice' },
+      { error: `Failed to analyze invoice: ${message}` },
       { status: 500 }
     );
   }
