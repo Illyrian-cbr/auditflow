@@ -1,15 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase, createServerClient } from '@/lib/supabase';
+import { createServerClient } from '@/lib/supabase';
+import { createRouteHandlerClient } from '@/lib/supabase-server-auth';
 import { anthropic, CLAUDE_MODEL } from '@/lib/claude';
 import type { AnalysisResult, SubscriptionTier } from '@/types';
 
 export async function POST(request: NextRequest) {
   try {
-    // Authenticate user
+    // Authenticate user via cookie-aware server client
+    const authClient = await createRouteHandlerClient();
     const {
       data: { user },
       error: authError,
-    } = await supabase.auth.getUser();
+    } = await authClient.auth.getUser();
 
     if (authError || !user) {
       return NextResponse.json(

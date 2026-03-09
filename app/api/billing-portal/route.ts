@@ -1,16 +1,18 @@
 import { NextResponse } from 'next/server';
-import { supabase, createServerClient } from '@/lib/supabase';
+import { createServerClient } from '@/lib/supabase';
+import { createRouteHandlerClient } from '@/lib/supabase-server-auth';
 import { stripe } from '@/lib/stripe';
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
 export async function POST() {
   try {
-    // Authenticate user
+    // Authenticate user via cookie-aware server client
+    const authClient = await createRouteHandlerClient();
     const {
       data: { user },
       error: authError,
-    } = await supabase.auth.getUser();
+    } = await authClient.auth.getUser();
 
     if (authError || !user) {
       return NextResponse.json(
