@@ -7,6 +7,7 @@ import { useAuth } from '@/app/providers';
 import { supabase } from '@/lib/supabase';
 import ScanCounter from '@/components/ScanCounter';
 import FileUpload from '@/components/FileUpload';
+import BulkUpload from '@/components/BulkUpload';
 import RiskBadge from '@/components/RiskBadge';
 import type { User as AppUser, Scan, ScanCount, TIER_LIMITS } from '@/types';
 
@@ -78,6 +79,7 @@ export default function DashboardPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
+  const [uploadMode, setUploadMode] = useState<'single' | 'bulk'>('single');
 
   const fetchDashboardData = useCallback(async () => {
     if (!user) return;
@@ -287,35 +289,68 @@ export default function DashboardPage() {
 
       {/* File Upload Section */}
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-        <h2 className="mb-4 text-lg font-semibold text-navy">
-          Upload Invoice
-        </h2>
-        <FileUpload
-          onFileSelect={handleFileSelect}
-          disabled={atLimit}
-          isUploading={analyzing}
-        />
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-navy">
+            Upload Invoice{uploadMode === 'bulk' ? 's' : ''}
+          </h2>
+          {!isFree && (
+            <div className="flex gap-1 rounded-lg bg-gray-100 p-0.5">
+              <button
+                onClick={() => setUploadMode('single')}
+                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
+                  uploadMode === 'single'
+                    ? 'bg-white text-navy shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Single
+              </button>
+              <button
+                onClick={() => setUploadMode('bulk')}
+                className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
+                  uploadMode === 'bulk'
+                    ? 'bg-white text-navy shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Bulk (up to 10)
+              </button>
+            </div>
+          )}
+        </div>
 
-        {/* Analyze Button */}
-        {selectedFile && !analyzing && !atLimit && (
-          <div className="mt-4 flex items-center gap-3">
-            <button
-              onClick={handleAnalyze}
-              className="rounded-lg bg-teal px-6 py-2.5 text-sm font-semibold text-white hover:bg-teal-dark transition-colors cursor-pointer"
-            >
-              Analyze Invoice
-            </button>
-            <span className="text-sm text-gray-500">
-              {selectedFile.name}
-            </span>
-          </div>
-        )}
+        {uploadMode === 'single' ? (
+          <>
+            <FileUpload
+              onFileSelect={handleFileSelect}
+              disabled={atLimit}
+              isUploading={analyzing}
+            />
 
-        {/* Analyze Error */}
-        {analyzeError && (
-          <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3">
-            <p className="text-sm text-red-700">{analyzeError}</p>
-          </div>
+            {/* Analyze Button */}
+            {selectedFile && !analyzing && !atLimit && (
+              <div className="mt-4 flex items-center gap-3">
+                <button
+                  onClick={handleAnalyze}
+                  className="rounded-lg bg-teal px-6 py-2.5 text-sm font-semibold text-white hover:bg-teal-dark transition-colors cursor-pointer"
+                >
+                  Analyze Invoice
+                </button>
+                <span className="text-sm text-gray-500">
+                  {selectedFile.name}
+                </span>
+              </div>
+            )}
+
+            {/* Analyze Error */}
+            {analyzeError && (
+              <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3">
+                <p className="text-sm text-red-700">{analyzeError}</p>
+              </div>
+            )}
+          </>
+        ) : (
+          <BulkUpload disabled={atLimit} maxFiles={10} />
         )}
       </div>
 

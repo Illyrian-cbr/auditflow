@@ -2,12 +2,14 @@
 
 import { useState, useCallback } from 'react';
 import RiskBadge from '@/components/RiskBadge';
+import SavingsReport from '@/components/SavingsReport';
 import type { AnalysisResult, Flag } from '@/types';
 
 interface AnalysisViewProps {
   result: AnalysisResult;
   scanId: string;
   userTier: string;
+  fileName?: string;
 }
 
 function formatCurrency(amount: number): string {
@@ -83,6 +85,7 @@ export default function AnalysisView({
   result,
   scanId,
   userTier,
+  fileName = 'invoice',
 }: AnalysisViewProps) {
   const [disputeLetter, setDisputeLetter] = useState<string>('');
   const [letterLoading, setLetterLoading] = useState(false);
@@ -474,7 +477,25 @@ export default function AnalysisView({
         </section>
       )}
 
-      {/* Section 7: Dispute Letter */}
+      {/* Section 7: Savings Report PDF (Pro only) */}
+      {userTier === 'pro' && (
+        <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+          <h2 className="mb-4 text-lg font-semibold text-navy">
+            Savings Report
+          </h2>
+          <p className="mb-3 text-sm text-gray-600">
+            Download a professional PDF report with your analysis results, flagged items, benchmark comparisons, and recommendations.
+          </p>
+          <SavingsReport
+            result={result}
+            scanId={scanId}
+            fileName={fileName}
+            userTier={userTier}
+          />
+        </section>
+      )}
+
+      {/* Section 8: Dispute Letter */}
       {canGenerateLetter && (
         <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
           <h2 className="mb-4 text-lg font-semibold text-navy">

@@ -81,3 +81,28 @@ export const TIER_PRICES: Record<SubscriptionTier, number> = {
   starter: 29,
   pro: 59,
 };
+
+export interface VendorTrend {
+  id: string;
+  user_id: string;
+  vendor_name_normalized: string;
+  service_category: string | null;
+  rate: number;
+  invoice_date: string | null;
+  scan_id: string | null;
+  created_at: string;
+}
+
+export interface PricingBenchmarkCache {
+  id: string;
+  service_category: string;
+  service_description: string;
+  region: string | null;
+  zip_code: string | null;
+  average_rate: number;
+  rate_range_low: number | null;
+  rate_range_high: number | null;
+  source: string | null;
+  sample_count: number;
+  last_updated: string;
+}

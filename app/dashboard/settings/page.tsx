@@ -62,6 +62,7 @@ function SettingsPageContent() {
   const [billingLoading, setBillingLoading] = useState(false);
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [emailNotifications, setEmailNotifications] = useState(true);
 
   // Check for checkout=success query param
   useEffect(() => {
@@ -88,6 +89,7 @@ function SettingsPageContent() {
 
       if (fetchError) throw new Error('Failed to load profile');
       setProfile(data as AppUser);
+      setEmailNotifications(data.email_notifications ?? true);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : 'An unexpected error occurred'
@@ -163,6 +165,18 @@ function SettingsPageContent() {
       );
     } finally {
       setCheckoutLoading(null);
+    }
+  };
+
+  const handleToggleNotifications = async () => {
+    const newValue = !emailNotifications;
+    setEmailNotifications(newValue);
+
+    if (user) {
+      await supabase
+        .from('users')
+        .update({ email_notifications: newValue })
+        .eq('id', user.id);
     }
   };
 
@@ -480,6 +494,28 @@ function SettingsPageContent() {
                 year: 'numeric',
               })}
             </dd>
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <dt className="text-xs font-medium uppercase tracking-wider text-gray-500">
+                Email Notifications
+              </dt>
+              <dd className="mt-1 text-sm text-gray-600">
+                Receive email summaries after each scan
+              </dd>
+            </div>
+            <button
+              onClick={handleToggleNotifications}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer ${
+                emailNotifications ? 'bg-teal' : 'bg-gray-300'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  emailNotifications ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
           </div>
         </dl>
       </section>

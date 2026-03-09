@@ -221,6 +221,7 @@ export default function ScanResultPage() {
         result={scan.analysis_result}
         scanId={scan.id}
         userTier={profile.subscription_tier}
+        fileName={scan.file_name}
       />
     </div>
   );

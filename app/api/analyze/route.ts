@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase, createServerClient } from '@/lib/supabase';
 import { anthropic, CLAUDE_MODEL } from '@/lib/claude';
 import { checkScanLimit, incrementScanCount } from '@/lib/scan-limits';
+import { getCachedBenchmark, upsertBenchmark } from '@/lib/benchmark-cache';
+import { trackVendorTrend } from '@/lib/vendor-trends';
 import type { AnalysisResult, SubscriptionTier } from '@/types';
 
 const TIER_1_PROMPT = `You are an expert invoice auditor. Analyze this invoice image thoroughly and return a JSON response with the following structure:
@@ -227,6 +229,44 @@ export async function POST(request: NextRequest) {
 
     // Increment scan count
     await incrementScanCount(user.id);
+
+    // Phase 2: Cache benchmarks for future lookups (Pro tier only)
+    if (isPro && analysisResult.benchmarks && analysisResult.benchmarks.length > 0) {
+      try {
+        for (const bench of analysisResult.benchmarks) {
+          await upsertBenchmark({
+            serviceCategory: bench.service_description,
+            serviceDescription: bench.service_description,
+            rate: bench.market_average,
+            source: bench.source,
+          });
+        }
+      } catch (cacheError) {
+        console.error('Failed to cache benchmarks:', cacheError);
+        // Non-critical — don't fail the response
+      }
+    }
+
+    // Phase 2: Track vendor trends (fire-and-forget)
+    if (scan?.id) {
+      trackVendorTrend(user.id, scan.id, analysisResult).catch((err) =>
+        console.error('Failed to track vendor trend:', err)
+      );
+    }
+
+    // Phase 2: Send email notification (fire-and-forget)
+    if (scan?.id) {
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+      fetch(`${appUrl}/api/notify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          scanId: scan.id,
+          analysisResult,
+        }),
+      }).catch((err) => console.error('Failed to send notification:', err));
+    }
 
     return NextResponse.json({
       result: analysisResult,
