@@ -5,32 +5,58 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/app/providers';
 import { supabase } from '@/lib/supabase';
 import PricingCards from '@/components/PricingCards';
-import type { User as AppUser, SubscriptionTier, TIER_PRICES } from '@/types';
+import ApiKeyManager from '@/components/ApiKeyManager';
+import ApiDocsPreview from '@/components/ApiDocsPreview';
+import type { User as AppUser, SubscriptionTier } from '@/types';
 
 const STRIPE_PRICE_IDS: Record<string, string> = {
   starter: process.env.NEXT_PUBLIC_STRIPE_STARTER_PRICE_ID ?? '',
   pro: process.env.NEXT_PUBLIC_STRIPE_PRO_PRICE_ID ?? '',
+  personal: process.env.NEXT_PUBLIC_STRIPE_PERSONAL_PRICE_ID ?? '',
+  team_starter: process.env.NEXT_PUBLIC_STRIPE_TEAM_STARTER_PRICE_ID ?? '',
+  team_pro: process.env.NEXT_PUBLIC_STRIPE_TEAM_PRO_PRICE_ID ?? '',
 };
 
 const TIER_DISPLAY: Record<
   SubscriptionTier,
-  { name: string; price: number; description: string }
+  { name: string; price: number; description: string; badge: string }
 > = {
   free: {
     name: 'Free',
     price: 0,
     description: '2 scans/month, Tier 1 analysis',
+    badge: 'bg-gray-100 text-gray-600',
+  },
+  personal: {
+    name: 'Personal',
+    price: 9,
+    description: '10 scans/month, consumer bill auditing',
+    badge: 'bg-purple-100 text-purple-700',
   },
   starter: {
     name: 'Starter',
     price: 29,
     description: '50 scans/month, dispute letters, email support',
+    badge: 'bg-teal/10 text-teal',
   },
   pro: {
     name: 'Pro',
     price: 59,
     description:
       '150 scans/month, market benchmarking, savings reports, priority support',
+    badge: 'bg-navy/10 text-navy',
+  },
+  team_starter: {
+    name: 'Team Starter',
+    price: 99,
+    description: '200 scans/month, 5 team members, shared limits',
+    badge: 'bg-blue-100 text-blue-700',
+  },
+  team_pro: {
+    name: 'Team Pro',
+    price: 199,
+    description: '500 scans/month, 10 team members, API access, priority support',
+    badge: 'bg-indigo-100 text-indigo-700',
   },
 };
 
@@ -68,7 +94,6 @@ function SettingsPageContent() {
   useEffect(() => {
     if (searchParams.get('checkout') === 'success') {
       setShowSuccess(true);
-      // Auto-dismiss after 8 seconds
       const timer = setTimeout(() => setShowSuccess(false), 8000);
       return () => clearTimeout(timer);
     }
@@ -223,7 +248,8 @@ function SettingsPageContent() {
 
   const currentTier = profile.subscription_tier;
   const tierInfo = TIER_DISPLAY[currentTier];
-  const isPro = currentTier === 'pro';
+  const isTopTier = currentTier === 'pro' || currentTier === 'team_pro';
+  const isProOrTeam = ['pro', 'team_starter', 'team_pro'].includes(currentTier);
 
   return (
     <div className="space-y-6">
@@ -339,26 +365,16 @@ function SettingsPageContent() {
             </div>
             <p className="mt-1 text-sm text-gray-600">{tierInfo.description}</p>
           </div>
-          {currentTier === 'free' && (
-            <span className="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600">
-              Free Plan
-            </span>
-          )}
-          {currentTier === 'starter' && (
-            <span className="inline-flex items-center rounded-full bg-teal/10 px-3 py-1 text-xs font-semibold text-teal">
-              Starter Plan
-            </span>
-          )}
-          {currentTier === 'pro' && (
-            <span className="inline-flex items-center rounded-full bg-navy/10 px-3 py-1 text-xs font-semibold text-navy">
-              Pro Plan
-            </span>
-          )}
+          <span
+            className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${tierInfo.badge}`}
+          >
+            {tierInfo.name} Plan
+          </span>
         </div>
       </section>
 
-      {/* Section 2: Upgrade Plans (hidden if already on Pro) */}
-      {!isPro && (
+      {/* Section 2: Upgrade Plans (hidden if already on top tier) */}
+      {!isTopTier && (
         <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
           <h2 className="mb-6 text-lg font-semibold text-navy">
             Upgrade Your Plan
@@ -394,7 +410,22 @@ function SettingsPageContent() {
         </section>
       )}
 
-      {/* Section 3: Billing */}
+      {/* Section 3: API Access (Pro and Team tiers only) */}
+      {isProOrTeam && (
+        <section id="api" className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+          <h2 className="mb-4 text-lg font-semibold text-navy">API Access</h2>
+          <p className="text-sm text-gray-600 mb-6">
+            Integrate invoice auditing into your own applications with our REST API.
+            Generate API keys below and use Bearer token authentication.
+          </p>
+          <div className="space-y-8">
+            <ApiKeyManager userTier={currentTier} />
+            <ApiDocsPreview />
+          </div>
+        </section>
+      )}
+
+      {/* Section 4: Billing */}
       <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
         <h2 className="mb-4 text-lg font-semibold text-navy">Billing</h2>
         {profile.stripe_customer_id ? (
@@ -461,7 +492,7 @@ function SettingsPageContent() {
         )}
       </section>
 
-      {/* Section 4: Account Info */}
+      {/* Section 5: Account Info */}
       <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
         <h2 className="mb-4 text-lg font-semibold text-navy">
           Account Information

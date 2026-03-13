@@ -8,13 +8,16 @@ import Stripe from 'stripe';
 export const runtime = 'nodejs';
 
 function getTierFromPriceId(priceId: string): SubscriptionTier {
-  if (priceId === STRIPE_PRICE_IDS.pro) {
-    return 'pro';
-  }
-  if (priceId === STRIPE_PRICE_IDS.starter) {
-    return 'starter';
-  }
+  if (priceId === STRIPE_PRICE_IDS.pro) return 'pro';
+  if (priceId === STRIPE_PRICE_IDS.starter) return 'starter';
+  if (priceId === STRIPE_PRICE_IDS.personal) return 'personal';
+  if (priceId === STRIPE_PRICE_IDS.team_starter) return 'team_starter';
+  if (priceId === STRIPE_PRICE_IDS.team_pro) return 'team_pro';
   return 'free';
+}
+
+function isTeamTier(tier: SubscriptionTier): boolean {
+  return tier === 'team_starter' || tier === 'team_pro';
 }
 
 async function getUserIdByCustomerId(customerId: string): Promise<string | null> {
@@ -95,6 +98,22 @@ export async function POST(request: NextRequest) {
             .from('users')
             .update({ subscription_tier: tier })
             .eq('id', userId);
+
+          // For team tiers, also update the team's subscription_tier
+          if (isTeamTier(tier)) {
+            const { data: userTeam } = await supabase
+              .from('users')
+              .select('team_id')
+              .eq('id', userId)
+              .single();
+
+            if (userTeam?.team_id) {
+              await supabase
+                .from('teams')
+                .update({ subscription_tier: tier })
+                .eq('id', userTeam.team_id);
+            }
+          }
         } else {
           console.error(
             'Could not find user for checkout.session.completed:',

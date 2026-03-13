@@ -1,14 +1,55 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/app/providers';
+import { supabase } from '@/lib/supabase';
+
+interface UserProfile {
+  subscription_tier: string;
+  team_id: string | null;
+  partner_id: string | null;
+}
 
 export default function Navbar() {
   const { user, loading, signOut } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
 
   const logoHref = user ? '/dashboard' : '/';
+
+  // Fetch user profile for conditional nav links
+  useEffect(() => {
+    if (!user) {
+      setProfile(null);
+      return;
+    }
+
+    supabase
+      .from('users')
+      .select('subscription_tier, team_id, partner_id')
+      .eq('id', user.id)
+      .single()
+      .then(({ data }) => {
+        if (data) setProfile(data as UserProfile);
+      });
+  }, [user]);
+
+  const tier = profile?.subscription_tier || 'free';
+  const hasTeam = !!profile?.team_id;
+  const isPartner = !!profile?.partner_id;
+  const isProOrTeam = ['pro', 'team_starter', 'team_pro'].includes(tier);
+  const isPaid = ['starter', 'pro', 'personal', 'team_starter', 'team_pro'].includes(tier);
+
+  const navLinks = user
+    ? [
+        { href: '/dashboard', label: 'Dashboard', show: true },
+        { href: '/dashboard/team', label: 'Team', show: hasTeam },
+        { href: '/dashboard/integrations', label: 'Integrations', show: isPaid },
+        { href: '/dashboard/partner', label: 'Partner', show: isPartner },
+        { href: '/dashboard/settings', label: 'Settings', show: true },
+      ].filter((link) => link.show)
+    : [];
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-navy text-white">
@@ -23,29 +64,52 @@ export default function Navbar() {
           </Link>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center gap-4">
+          <div className="hidden md:flex items-center gap-1">
             {loading ? (
               <div className="h-5 w-24 animate-pulse rounded bg-navy-light" />
             ) : user ? (
               <>
-                <Link
-                  href="/dashboard"
-                  className="rounded-md px-3 py-2 text-sm font-medium hover:bg-navy-light transition-colors"
-                >
-                  Dashboard
-                </Link>
-                <span className="text-sm text-gray-300 truncate max-w-[200px]">
+                {navLinks.map((link) => (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    className="rounded-md px-3 py-2 text-sm font-medium hover:bg-navy-light transition-colors"
+                  >
+                    {link.label}
+                  </Link>
+                ))}
+                {isProOrTeam && (
+                  <Link
+                    href="/dashboard/settings#api"
+                    className="rounded-md px-3 py-2 text-sm font-medium text-teal hover:bg-navy-light transition-colors"
+                  >
+                    API
+                  </Link>
+                )}
+                <span className="ml-2 text-sm text-gray-300 truncate max-w-[160px]">
                   {user.email}
                 </span>
                 <button
                   onClick={signOut}
-                  className="rounded-md bg-navy-light px-4 py-2 text-sm font-medium hover:bg-navy-dark transition-colors"
+                  className="ml-2 rounded-md bg-navy-light px-4 py-2 text-sm font-medium hover:bg-navy-dark transition-colors"
                 >
                   Sign Out
                 </button>
               </>
             ) : (
               <>
+                <Link
+                  href="/personal"
+                  className="rounded-md px-3 py-2 text-sm font-medium hover:bg-navy-light transition-colors"
+                >
+                  For Consumers
+                </Link>
+                <Link
+                  href="/partners"
+                  className="rounded-md px-3 py-2 text-sm font-medium hover:bg-navy-light transition-colors"
+                >
+                  Partners
+                </Link>
                 <Link
                   href="/login"
                   className="rounded-md px-4 py-2 text-sm font-medium hover:bg-navy-light transition-colors"
@@ -106,21 +170,33 @@ export default function Navbar() {
       {/* Mobile Slide-Down Menu */}
       <div
         className={`md:hidden overflow-hidden transition-all duration-300 ease-in-out ${
-          mobileMenuOpen ? 'max-h-64 opacity-100' : 'max-h-0 opacity-0'
+          mobileMenuOpen ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'
         }`}
       >
-        <div className="border-t border-navy-light px-4 pb-4 pt-2 space-y-2">
+        <div className="border-t border-navy-light px-4 pb-4 pt-2 space-y-1">
           {loading ? (
             <div className="h-5 w-24 animate-pulse rounded bg-navy-light" />
           ) : user ? (
             <>
-              <Link
-                href="/dashboard"
-                onClick={() => setMobileMenuOpen(false)}
-                className="block rounded-md px-3 py-2 text-sm font-medium hover:bg-navy-light transition-colors"
-              >
-                Dashboard
-              </Link>
+              {navLinks.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="block rounded-md px-3 py-2 text-sm font-medium hover:bg-navy-light transition-colors"
+                >
+                  {link.label}
+                </Link>
+              ))}
+              {isProOrTeam && (
+                <Link
+                  href="/dashboard/settings#api"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="block rounded-md px-3 py-2 text-sm font-medium text-teal hover:bg-navy-light transition-colors"
+                >
+                  API Access
+                </Link>
+              )}
               <div className="px-3 py-2 text-sm text-gray-300 truncate">
                 {user.email}
               </div>
@@ -136,6 +212,20 @@ export default function Navbar() {
             </>
           ) : (
             <>
+              <Link
+                href="/personal"
+                onClick={() => setMobileMenuOpen(false)}
+                className="block rounded-md px-3 py-2 text-sm font-medium hover:bg-navy-light transition-colors"
+              >
+                For Consumers
+              </Link>
+              <Link
+                href="/partners"
+                onClick={() => setMobileMenuOpen(false)}
+                className="block rounded-md px-3 py-2 text-sm font-medium hover:bg-navy-light transition-colors"
+              >
+                Partners
+              </Link>
               <Link
                 href="/login"
                 onClick={() => setMobileMenuOpen(false)}

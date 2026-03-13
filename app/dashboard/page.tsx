@@ -9,7 +9,7 @@ import ScanCounter from '@/components/ScanCounter';
 import FileUpload from '@/components/FileUpload';
 import BulkUpload from '@/components/BulkUpload';
 import RiskBadge from '@/components/RiskBadge';
-import type { User as AppUser, Scan, ScanCount, TIER_LIMITS } from '@/types';
+import type { User as AppUser, Scan, ScanCount } from '@/types';
 
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat('en-US', {
@@ -38,22 +38,15 @@ function SkeletonBlock({ className }: { className?: string }) {
 function DashboardSkeleton() {
   return (
     <div className="space-y-6">
-      {/* Welcome skeleton */}
       <SkeletonBlock className="h-8 w-64" />
-
-      {/* Scan counter skeleton */}
       <div className="rounded-xl border border-gray-200 bg-white p-6">
         <SkeletonBlock className="h-5 w-48 mb-3" />
         <SkeletonBlock className="h-2.5 w-full max-w-sm" />
       </div>
-
-      {/* Upload area skeleton */}
       <div className="rounded-xl border border-gray-200 bg-white p-6">
         <SkeletonBlock className="h-6 w-40 mb-4" />
         <SkeletonBlock className="h-40 w-full" />
       </div>
-
-      {/* Recent scans skeleton */}
       <div className="rounded-xl border border-gray-200 bg-white p-6">
         <SkeletonBlock className="h-6 w-36 mb-4" />
         <div className="space-y-3">
@@ -75,11 +68,21 @@ export default function DashboardPage() {
   const [recentScans, setRecentScans] = useState<Scan[]>([]);
   const [dataLoading, setDataLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [hasIntegration, setHasIntegration] = useState(false);
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
   const [uploadMode, setUploadMode] = useState<'single' | 'bulk'>('single');
+
+  const tierLimits: Record<string, number> = {
+    free: 2,
+    personal: 10,
+    starter: 50,
+    pro: 150,
+    team_starter: 200,
+    team_pro: 500,
+  };
 
   const fetchDashboardData = useCallback(async () => {
     if (!user) return;
@@ -98,33 +101,58 @@ export default function DashboardPage() {
       if (profileError) throw new Error('Failed to load profile');
       setProfile(profileData as AppUser);
 
-      // Fetch scan count for current billing period
-      const { data: scanCountData, error: scanCountError } = await supabase
-        .from('scan_counts')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('billing_period_start', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      const tier = profileData?.subscription_tier ?? 'free';
+      const isTeamTier = tier === 'team_starter' || tier === 'team_pro';
 
-      if (scanCountError) throw new Error('Failed to load scan counts');
+      // Fetch scan count — team or individual
+      if (isTeamTier && profileData?.team_id) {
+        const { data: teamScanData } = await supabase
+          .from('team_scan_counts')
+          .select('*')
+          .eq('team_id', profileData.team_id)
+          .order('billing_period_start', { ascending: false })
+          .limit(1)
+          .maybeSingle();
 
-      if (scanCountData) {
-        setScanCount(scanCountData as ScanCount);
+        if (teamScanData) {
+          setScanCount({
+            user_id: user.id,
+            billing_period_start: teamScanData.billing_period_start,
+            billing_period_end: teamScanData.billing_period_end,
+            count: teamScanData.count,
+            limit: teamScanData.limit,
+          });
+        } else {
+          setScanCount({
+            user_id: user.id,
+            billing_period_start: new Date().toISOString(),
+            billing_period_end: new Date().toISOString(),
+            count: 0,
+            limit: tierLimits[tier] ?? 2,
+          });
+        }
       } else {
-        // No scan count record yet - default to 0 used
-        const tierLimits: Record<string, number> = {
-          free: 2,
-          starter: 50,
-          pro: 150,
-        };
-        setScanCount({
-          user_id: user.id,
-          billing_period_start: new Date().toISOString(),
-          billing_period_end: new Date().toISOString(),
-          count: 0,
-          limit: tierLimits[profileData?.subscription_tier ?? 'free'] ?? 2,
-        });
+        const { data: scanCountData, error: scanCountError } = await supabase
+          .from('scan_counts')
+          .select('*')
+          .eq('user_id', user.id)
+          .order('billing_period_start', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (scanCountError) throw new Error('Failed to load scan counts');
+
+        if (scanCountData) {
+          setScanCount(scanCountData as ScanCount);
+        } else {
+          setScanCount({
+            user_id: user.id,
+            billing_period_start: new Date().toISOString(),
+            billing_period_end: new Date().toISOString(),
+            count: 0,
+            limit: tierLimits[tier] ?? 2,
+          });
+        }
       }
 
       // Fetch recent scans
@@ -137,6 +165,17 @@ export default function DashboardPage() {
 
       if (scansError) throw new Error('Failed to load recent scans');
       setRecentScans((scansData as Scan[]) ?? []);
+
+      // Check for active integrations
+      const { data: integrationData } = await supabase
+        .from('integrations')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('is_active', true)
+        .limit(1)
+        .maybeSingle();
+
+      setHasIntegration(!!integrationData);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : 'An unexpected error occurred'
@@ -144,6 +183,7 @@ export default function DashboardPage() {
     } finally {
       setDataLoading(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   useEffect(() => {
@@ -240,7 +280,11 @@ export default function DashboardPage() {
   if (!user || !profile) return null;
 
   const atLimit = scanCount ? scanCount.count >= scanCount.limit : false;
-  const isFree = profile.subscription_tier === 'free';
+  const tier = profile.subscription_tier;
+  const isFree = tier === 'free';
+  const isPersonal = tier === 'personal';
+  const isTeamTier = tier === 'team_starter' || tier === 'team_pro';
+  const isPaid = !isFree;
 
   return (
     <div className="space-y-6">
@@ -250,14 +294,16 @@ export default function DashboardPage() {
           Welcome back, {profile.name || user.email?.split('@')[0] || 'there'}
         </h1>
         <p className="mt-1 text-sm text-gray-500">
-          Upload an invoice to get started with your analysis.
+          {isPersonal
+            ? 'Upload a bill to check for hidden fees and overcharges.'
+            : 'Upload an invoice to get started with your analysis.'}
         </p>
       </div>
 
       {/* Scan Counter */}
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-gray-500">
-          Monthly Usage
+          {isTeamTier ? 'Team Usage' : 'Monthly Usage'}
         </h2>
         <ScanCounter
           used={scanCount?.count ?? 0}
@@ -287,13 +333,35 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {/* Integration Quick Action */}
+      {hasIntegration && (
+        <div className="rounded-xl border border-blue-100 bg-blue-50/50 p-5">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-navy">
+                Import from accounting software
+              </p>
+              <p className="mt-0.5 text-sm text-gray-600">
+                Pull invoices directly from your connected QuickBooks or Xero account
+              </p>
+            </div>
+            <Link
+              href="/dashboard/integrations"
+              className="shrink-0 rounded-lg bg-navy px-4 py-2 text-sm font-semibold text-white hover:bg-navy-light transition-colors text-center"
+            >
+              Import Invoices
+            </Link>
+          </div>
+        </div>
+      )}
+
       {/* File Upload Section */}
       <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold text-navy">
-            Upload Invoice{uploadMode === 'bulk' ? 's' : ''}
+            Upload {isPersonal ? 'Bill' : 'Invoice'}{uploadMode === 'bulk' ? 's' : ''}
           </h2>
-          {!isFree && (
+          {isPaid && !isPersonal && (
             <div className="flex gap-1 rounded-lg bg-gray-100 p-0.5">
               <button
                 onClick={() => setUploadMode('single')}
@@ -319,7 +387,7 @@ export default function DashboardPage() {
           )}
         </div>
 
-        {uploadMode === 'single' ? (
+        {uploadMode === 'single' || isPersonal ? (
           <>
             <FileUpload
               onFileSelect={handleFileSelect}
@@ -334,7 +402,7 @@ export default function DashboardPage() {
                   onClick={handleAnalyze}
                   className="rounded-lg bg-teal px-6 py-2.5 text-sm font-semibold text-white hover:bg-teal-dark transition-colors cursor-pointer"
                 >
-                  Analyze Invoice
+                  Analyze {isPersonal ? 'Bill' : 'Invoice'}
                 </button>
                 <span className="text-sm text-gray-500">
                   {selectedFile.name}
@@ -377,7 +445,7 @@ export default function DashboardPage() {
               No scans yet
             </p>
             <p className="mt-1 text-sm text-gray-400">
-              Upload your first invoice above to get started.
+              Upload your first {isPersonal ? 'bill' : 'invoice'} above to get started.
             </p>
           </div>
         ) : (
